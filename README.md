@@ -1,6 +1,6 @@
 # 🎥 Sistema NVR Universale
 
-Un sistema di videosorveglianza (NVR) sicuro, modulare e multilingua per la gestione di telecamere IP con supporto RTSP. Controllo completo via Telegram e gestione automatica dei processi.
+Un sistema di videosorveglianza (NVR) sicuro, modulare e multilingua per la gestione di telecamere IP con supporto RTSP. Controllo completo via Telegram e gestione automatica dei processi. Integrazione opzionale con Tailscale per monitoraggio remoto dei flussi RTSP.
 
 ## 🌟 Caratteristiche Principali
 
