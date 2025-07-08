@@ -242,9 +242,9 @@ password = ENC:xyz123...          # Password cifrata automaticamente
 [STORAGE]
 use_external_drive = true
 external_device = /dev/sdb1
-external_mount_point = /media/TOSHIBA
+external_mount_point = /media/kingston
 rec_folder_name = registrazioni
-storage_size = 450               # GB
+storage_size = 1000              # GB fallback
 storage_max_use = 0.945          # 94.5% soglia pulizia
 ```
 
