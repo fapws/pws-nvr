@@ -433,86 +433,364 @@ ffplay rtsp://localhost:8554/camera1
 ffplay rtsp://TUO_IP_TAILSCALE:8554/camera1
 ```
 
-### **🔧 Configurazione Avanzata Servizi Opzionali**
+### **Gestione Telecamere**
 
-#### **Firewall per Tailscale e MediaMTX**
+#### **Configurazione manuale telecamere**
+Durante l'installazione o tramite script dedicato:
 ```bash
-# UFW (Ubuntu/Debian)
-sudo ufw allow in on tailscale0
-sudo ufw allow 8554/tcp  # MediaMTX RTSP
+# Durante installazione
+./install.sh  # Include configurazione telecamere
 
-# iptables (manuale)
-sudo iptables -A INPUT -i tailscale0 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 8554 -j ACCEPT
+# Post-installazione
+source venv/bin/activate
+python3 add_camera.py
+
+# Con script wrapper (raccomandato)
+./add_camera.sh
 ```
 
-#### **Monitoraggio servizi opzionali**
-Dopo la configurazione, i comandi Telegram funzioneranno:
-- `/tailscale_status` - Stato Tailscale
+**Funzionalità script aggiunta telecamere:**
+- 🔍 **Test connessione robusto** con ffprobe
+- 🔒 **Cifratura automatica password** (username rimane in chiaro)
+- 🌐 **Interfaccia multilingua**
+- ⚡ **Diagnostica connessione** avanzata
+- 🔄 **Riavvio automatico servizio** (opzionale)
+
+#### **Configurazione esempio telecamera**
+```ini
+[TelecameraSoggiorno]
+ip = 192.168.1.100
+port = 554
+path = stream1                    # Stream principale
+path2 = stream2                   # Stream secondario (opzionale)
+username = admin                  # Username in chiaro
+password = ENC:xyz123...          # Password cifrata automaticamente
+```
+
+### **Storage Configuration**
+
+#### **Disco esterno con mount automatico**
+```ini
+[STORAGE]
+use_external_drive = true
+external_device = /dev/sdb1
+external_mount_point = /media/TOSHIBA
+rec_folder_name = registrazioni
+storage_size = 450               # GB
+storage_max_use = 0.945          # 94.5% soglia pulizia
+```
+
+#### **Cartella locale**
+```ini
+[STORAGE]
+use_external_drive = false
+rec_folder_name = registrazioni
+storage_size = 100
+storage_max_use = 0.85
+```
+
+#### **Percorso personalizzato**
+```ini
+[STORAGE]
+use_external_drive = false
+custom_path = /mnt/nas/registrazioni
+storage_size = 1000
+storage_max_use = 0.90
+```
+
+### **Configurazione Telegram Bot**
+1. Crea un bot con [@BotFather](https://t.me/BotFather)
+2. Ottieni il token del bot  
+3. Ottieni il tuo Chat ID da [@userinfobot](https://t.me/userinfobot)
+4. Configura durante l'installazione o manualmente:
+
+```ini
+[TELEGRAM]
+bot_token = ENC:token_cifrato...     # Token bot cifrato automaticamente
+chat_id = 123456789                  # Chat ID (può essere cifrato)
+ip = 100.64.0.1                     # IP Tailscale per streaming (opzionale)
+```
+
+### **Sicurezza e Cifratura**
+
+#### **Cifratura automatica credenziali**
+- **Password telecamere** cifrate automaticamente
+- **Token Telegram** cifrato automaticamente  
+- **Chiave AES-256-CBC** generata automaticamente
+- **File .nvr_key** con permessi sicuri (600)
+
+#### **Variabili d'ambiente per sicurezza avanzata**
+```bash
+# Chiave master personalizzata
+export NVR_MASTER_PASSWORD="password_sicura_2025"
+
+# Percorso chiave di cifratura personalizzato
+export NVR_KEY_PATH="/percorso/sicuro/.nvr_key"
+```
+
+#### **Migrazione credenziali esistenti**
+```bash
+# Se hai credenziali non cifrate da migrare
+source venv/bin/activate
+python3 -c "from security_manager import SecurityManager; SecurityManager('config.ini').encrypt_existing_credentials()"
+```
+
+## 🌐 Configurazione Servizi Opzionali
+
+> **⚠️ Importante**: I servizi seguenti sono **opzionali** e **non vengono configurati** dallo script di installazione automatica. Sono necessari solo per funzionalità avanzate di accesso remoto.
+
+### **🔗 Tailscale (Accesso Remoto VPN)**
+
+Tailscale permette l'accesso remoto sicuro al sistema NVR da qualsiasi luogo.
+
+#### **Installazione Tailscale**
+```bash
+# Ubuntu/Debian
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# Fedora/CentOS
+sudo dnf config-manager --add-repo https://pkgs.tailscale.com/stable/fedora/tailscale.repo
+sudo dnf install tailscale
+
+# Arch Linux
+sudo pacman -S tailscale
+```
+
+#### **Configurazione Tailscale**
+```bash
+# Avvia servizio
+sudo systemctl enable --now tailscaled
+
+# Connetti dispositivo
+sudo tailscale up
+
+# Per funzionalità VPN completa (exit node)
+sudo tailscale up --advertise-exit-node
+
+# Verifica stato
+tailscale status
+```
+
+#### **Configurazione IP Tailscale nel bot**
+Una volta configurato Tailscale, aggiorna `config.ini`:
+```ini
+[TELEGRAM]
+ip = 100.64.0.X  # Sostituisci con il tuo IP Tailscale
+```
+
+### **📺 MediaMTX (Server RTSP per Streaming)**
+
+MediaMTX permette di redistribuire i stream delle telecamere per accesso remoto ottimizzato.
+
+#### **Installazione MediaMTX**
+```bash
+# Scarica ultima versione (verifica su GitHub per versione aggiornata)
+wget https://github.com/bluenviron/mediamtx/releases/latest/download/mediamtx_v1.0.0_linux_amd64.tar.gz
+
+# Estrai
+tar -xzf mediamtx_*.tar.gz
+
+# Sposta in directory sistema
+sudo mv mediamtx /usr/local/bin/
+sudo chmod +x /usr/local/bin/mediamtx
+
+# Crea directory configurazione
+sudo mkdir -p /etc/mediamtx
+```
+
+#### **Configurazione MediaMTX**
+```bash
+# Crea file configurazione base
+sudo tee /etc/mediamtx/mediamtx.yml > /dev/null << 'EOF'
+# Configurazione MediaMTX per NVR
+logLevel: info
+logDestinations: [stdout]
+logFile: /var/log/mediamtx.log
+
+# Server RTSP
+rtspAddress: :8554
+rtspEncryption: no
+rtspAllowOrigin: '*'
+
+# Autenticazione (opzionale)
+authMethods: [basic]
+
+# Path per telecamere (personalizza secondo le tue telecamere)
+paths:
+  camera1:
+    source: rtsp://username:password@192.168.1.100:554/stream1
+    sourceProtocol: automatic
+    
+  camera2:
+    source: rtsp://username:password@192.168.1.101:554/stream1
+    sourceProtocol: automatic
+EOF
+```
+
+#### **Servizio systemd per MediaMTX**
+```bash
+# Crea servizio systemd
+sudo tee /etc/systemd/system/mediamtx.service > /dev/null << 'EOF'
+[Unit]
+Description=MediaMTX RTSP Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Abilita e avvia servizio
+sudo systemctl daemon-reload
+sudo systemctl enable mediamtx
+sudo systemctl start mediamtx
+sudo systemctl status mediamtx
+```
+
+#### **Test MediaMTX**
+```bash
+# Testa stream locale
+ffplay rtsp://localhost:8554/camera1
+
+# Testa da remoto (con Tailscale)
+ffplay rtsp://TUO_IP_TAILSCALE:8554/camera1
+```
+
+### **Configurazione Servizi Opzionali**
+
+⚠️ **IMPORTANTE**: Lo script di installazione `install.sh` configura solo il sistema NVR base. I servizi seguenti vanno configurati manualmente se desiderati:
+
+#### **🌐 Tailscale (VPN per accesso remoto)**
+
+**Tailscale** permette accesso sicuro al sistema da remoto tramite VPN mesh. I comandi Telegram `/tailscale_*` funzionano solo se Tailscale è installato e configurato.
+
+```bash
+# 1. Installa Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# 2. Autentica il dispositivo
+sudo tailscale up
+
+# 3. (Opzionale) Abilita exit node per VPN completa
+sudo tailscale up --advertise-exit-node
+
+# 4. (Opzionale) Accetta exit node dal pannello admin
+# https://login.tailscale.com/admin/machines
+```
+
+**Configurazione per streaming remoto:**
+```ini
+# In config.ini, sezione [TELEGRAM]
+ip = 100.64.0.1    # IP Tailscale del tuo dispositivo NVR
+```
+
+**Comandi Telegram disponibili dopo configurazione:**
+- `/tailscale_status` - Stato connessione
 - `/tailscale_start` - Avvia Tailscale
+- `/tailscale_vpn` - Avvia come exit node VPN
 - `/tailscale_stop` - Ferma Tailscale
-- `/start_rtsp` - Avvia MediaMTX
-- `/stop_rtsp` - Ferma MediaMTX
 
-### **🎯 Casi d'uso servizi opzionali**
+#### **📡 MediaMTX (Server RTSP per streaming remoto)**
 
-#### **Solo accesso locale**
-- ❌ Tailscale non necessario
-- ❌ MediaMTX non necessario
-- ✅ Bot Telegram locale funziona perfettamente
+**MediaMTX** fornisce un server RTSP locale per streaming ottimizzato delle telecamere. I comandi Telegram `/start_rtsp` e `/stop_rtsp` funzionano solo se MediaMTX è installato.
 
-#### **Accesso remoto via Telegram**
-- ✅ Tailscale necessario per bot Telegram remoto
-- ❌ MediaMTX opzionale
+```bash
+# 1. Scarica MediaMTX (sostituisci X.X.X con versione corrente)
+wget https://github.com/bluenviron/mediamtx/releases/download/vX.X.X/mediamtx_vX.X.X_linux_amd64.tar.gz
 
-#### **Streaming remoto telecamere**
-- ✅ Tailscale necessario
-- ✅ MediaMTX necessario per stream ottimizzati
-- 🎥 Accesso a stream: `rtsp://IP_TAILSCALE:8554/camera1`
+# 2. Estrai e installa
+tar -xzf mediamtx_*.tar.gz
+sudo cp mediamtx /usr/local/bin/
+sudo chmod +x /usr/local/bin/mediamtx
 
-#### **Setup completo remoto**
-- ✅ Tailscale per accesso VPN sicuro
-- ✅ MediaMTX per streaming ottimizzato
-- 📱 Controllo completo via Telegram da ovunque
-- 🎥 Visualizzazione stream da app RTSP remote
+# 3. Crea configurazione personalizzata
+sudo mkdir -p /etc/mediamtx
+sudo cp mediamtx.yml /etc/mediamtx/
 
-## 📱 Comandi Telegram Completi
+# 4. (Opzionale) Crea servizio systemd
+sudo tee /etc/systemd/system/mediamtx.service > /dev/null <<EOF
+[Unit]
+Description=MediaMTX RTSP Server
+After=network.target
 
-Una volta configurato il bot, potrai controllare completamente il sistema via Telegram:
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=always
+RestartSec=5
 
-### **Comandi Principali**
-- `/nvr_status` - 📊 Stato completo sistema (CPU, RAM, servizi, rete)
-- `/nvr_start` - ▶️ Avvia servizio NVR
-- `/nvr_restart` - 🔄 Riavvia servizio NVR
-- `/nvr_stop` - ⏹ Ferma servizio NVR
-- `/reset_camera_attempts` - 🔄 Reset contatori riconnessione telecamere
+[Install]
+WantedBy=multi-user.target
+EOF
 
-### **Gestione Sistema**
-- `/system_health` - 💚 Diagnostica completa sistema
-- `/storage_stats` - 💾 Statistiche dettagliate storage
-- `/process_status` - ⚙️ Stato processi ffmpeg
-- `/cleanup_storage` - 🗑️ Pulizia manuale storage
-- `/reboot` - 🔄 Riavvia sistema
-- `/shutdown` - ⚡ Spegni sistema
+# 5. Abilita e avvia servizio
+sudo systemctl daemon-reload
+sudo systemctl enable mediamtx
+sudo systemctl start mediamtx
+```
 
-### **Servizi Aggiuntivi**
-- `/start_rtsp` - 🟢 Avvia server RTSP (MediaMTX)
-- `/stop_rtsp` - 🔴 Ferma server RTSP
-- `/tailscale_start` - 🟢 Avvia Tailscale
-- `/tailscale_vpn` - 🟢 Avvia Tailscale VPN (exit node)
-- `/tailscale_stop` - 🔴 Ferma Tailscale
-- `/tailscale_status` - 📡 Stato Tailscale
+**Configurazione base MediaMTX** (`/etc/mediamtx/mediamtx.yml`):
+```yaml
+# Server RTSP su porta 8554
+rtspAddress: :8554
+rtmpAddress: :1935
+hlsAddress: :8888
+webrtcAddress: :8889
 
-### **Menu Interattivo**
-- `/menu` - 📌 Menu con pulsanti interattivi per tutti i comandi
+# Proxy telecamere (esempio)
+paths:
+  telecamera1:
+    source: rtsp://admin:password@192.168.1.100:554/stream1
+  telecamera2:
+    source: rtsp://admin:password@192.168.1.101:554/stream1
+```
 
-### **Notifiche Automatiche**
-Il bot invia notifiche automatiche per:
-- 🚨 **Eventi critici** (spazio disco, temperatura)
-- 🔄 **Riavvii automatici** processi ffmpeg
-- ⚠️ **Errori connessione** telecamere
-- 🟢 **Ripristino connessioni** telecamere
-- 🌡️ **Temperature elevate** CPU
+**Accesso stream remoto tramite Tailscale:**
+```bash
+# Da remoto, connetti a:
+rtsp://IP_TAILSCALE_NVR:8554/telecamera1
+rtsp://IP_TAILSCALE_NVR:8554/telecamera2
+```
+
+**Comandi Telegram disponibili dopo configurazione:**
+- `/start_rtsp` - Avvia server MediaMTX
+- `/stop_rtsp` - Ferma server MediaMTX
+
+#### **📱 Configurazione completa accesso remoto**
+
+**Setup completo per monitoraggio da smartphone/PC remoto:**
+
+1. **Installa e configura Tailscale** (come sopra)
+2. **Installa e configura MediaMTX** (come sopra)  
+3. **Configura IP Tailscale in config.ini**:
+   ```ini
+   [TELEGRAM]
+   ip = 100.64.0.1  # Il tuo IP Tailscale NVR
+   ```
+4. **Riavvia servizio Telegram Bot**:
+   ```bash
+   sudo systemctl restart telegram_bot
+   ```
+5. **Testa accesso remoto**:
+   - Connetti smartphone/PC a Tailscale
+   - Usa comandi Telegram `/start_rtsp`, `/tailscale_status`
+   - Apri stream: `rtsp://IP_TAILSCALE:8554/telecamera1`
+
+**App consigliate per viewing remoto:**
+- **Android**: VLC, RTSP Viewer
+- **iOS**: VLC, Live Cams Pro  
+- **Windows**: VLC, OBS Studio
+- **macOS**: VLC, IINA
 
 ## 🔍 Monitoraggio Avanzato
 
@@ -561,7 +839,7 @@ tail -f logs/telegram_bot.log
 #### "Errore test connessione telecamera (stimeout/timeout)"
 Il sistema usa automaticamente l'opzione corretta per la tua versione ffprobe:
 ```bash
-# Testa manualmente connessione
+# Testta manualmente connessione
 ffprobe -timeout 10000000 -i "rtsp://user:pass@ip:554/stream1"
 
 # Riaggiunge telecamera con script aggiornato
@@ -840,7 +1118,7 @@ print('✅ Credenziali migrate e cifrate')
 ```bash
 # Il sistema è retrocompatibile
 # I file lingua vengono creati automaticamente al primo avvio
-./install.sh  # Reinstalla solo i file mancanti
+./install.sh  # Reinstalla i file mancanti
 ```
 
 ### **Verifica post-aggiornamento**
@@ -963,6 +1241,10 @@ sudo systemctl status nvr telegram_bot
 # Monitoring
 tail -f logs/nvr.log
 ```
+
+> **⚠️ Nota importante**: Lo script di installazione configura solo il sistema NVR base. 
+> - **Tailscale** e **MediaMTX** per l'accesso remoto vanno configurati separatamente
+> - Vedi [Configurazione Servizi Opzionali](#-configurazione-servizi-opzionali) per istruzioni dettagliate
 
 ## 📈 Statistiche Sistema
 
