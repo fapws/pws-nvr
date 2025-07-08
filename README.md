@@ -1261,7 +1261,7 @@ tail -f logs/nvr.log
 - **Entrambi**: Non installati automaticamente, vedi [Configurazione Servizi Opzionali](#-configurazione-servizi-opzionali)
 
 ### **Performance tipiche**
-- **Telecamere simultanee**: 4-8 (dipende da hardware)
+- **Telecamere simultanee**: 4-48 (dipende da hardware)
 - **Segmentazione**: File 5 minuti, ~50-200MB per telecamera/ora
 - **Latenza Telegram**: <2 secondi per comandi
 - **Riavvio automatico**: <30 secondi per processo ffmpeg
