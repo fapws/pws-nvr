@@ -1,0 +1,49 @@
+# Esempio di configurazione NVR
+# Copiare questo file come config.ini e modificarlo secondo le proprie esigenze
+
+[Logging]
+log_dir = logs
+
+[LANGUAGE]
+# Lingua del sistema: en (English), it (Italiano)
+language = en
+
+[STORAGE]
+# Opzioni: true per disco esterno, false per locale
+use_external_drive = false
+rec_folder_name = registrazioni
+storage_size = 450
+storage_max_use = 0.945
+
+# Solo per disco esterno
+external_mount_point = /media/TOSHIBA
+external_device = /dev/sdb1
+
+# Solo per percorso personalizzato
+# custom_path = /percorso/personalizzato/registrazioni
+
+[TELEGRAM]
+# Ottenere token da @BotFather
+bot_token = 1234567890:ABC-DEF1234567890abcdef1234567890
+# Ottenere chat_id da @userinfobot
+chat_id = 123456789
+# IP Tailscale per streaming remoto (opzionale)
+ip = 100.64.0.1
+
+# Esempio configurazione telecamera
+[CameraEsempio]
+ip = 192.168.1.100
+port = 554
+path = stream1
+path2 = stream2
+username = admin
+password = password123
+
+# Aggiungi altre telecamere copiando la sezione sopra
+# [AltraTelecamera]
+# ip = 192.168.1.101
+# port = 554
+# path = stream1
+# path2 = stream2
+# username = admin
+# password = password456
