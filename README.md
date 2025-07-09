@@ -242,9 +242,9 @@ password = ENC:xyz123...          # Password cifrata automaticamente
 [STORAGE]
 use_external_drive = true
 external_device = /dev/sdb1
-external_mount_point = /media/TOSHIBA
+external_mount_point = /media/kingston
 rec_folder_name = registrazioni
-storage_size = 450               # GB
+storage_size = 1000              # GB fallback
 storage_max_use = 0.945          # 94.5% soglia pulizia
 ```
 
@@ -1261,7 +1261,7 @@ tail -f logs/nvr.log
 - **Entrambi**: Non installati automaticamente, vedi [Configurazione Servizi Opzionali](#-configurazione-servizi-opzionali)
 
 ### **Performance tipiche**
-- **Telecamere simultanee**: 4-8 (dipende da hardware)
+- **Telecamere simultanee**: 4-48 (dipende da hardware)
 - **Segmentazione**: File 5 minuti, ~50-200MB per telecamera/ora
 - **Latenza Telegram**: <2 secondi per comandi
 - **Riavvio automatico**: <30 secondi per processo ffmpeg
