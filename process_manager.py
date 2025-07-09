@@ -471,7 +471,7 @@ def system_health_check():
                 logging.warning(f"⚠️ Memoria critica: {memory.percent}%")
                 send_telegram_message(f"⚠️ Memoria critica: {memory.percent}%")
             
-            if disk_usage.percent > 95:
+            if disk_usage.percent > 99:
                 logging.critical(f"🔥 Disco quasi pieno: {disk_usage.percent}%")
                 send_telegram_message(f"🔥 CRITICO: Disco quasi pieno: {disk_usage.percent}%")
             

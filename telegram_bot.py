@@ -570,7 +570,7 @@ def get_health_status(cpu, memory, disk, temp):
     elif memory > 80:
         issues.append(get_translation("bot", "health_ram_high"))
     
-    if disk > 95:
+    if disk > 99:
         issues.append(get_translation("bot", "health_disk_critical"))
     elif disk > 85:
         issues.append(get_translation("bot", "health_disk_high"))
