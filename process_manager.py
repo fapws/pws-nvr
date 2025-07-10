@@ -392,16 +392,17 @@ def smart_cleanup(path, target_usage_percent=90):
         free_gb = usage.free / (1024 ** 3)
         current_usage_percent = (usage.used / usage.total) * 100
         
-        logging.info(f"💾 Stato storage: {used_gb:.1f}GB usati / {total_gb:.1f}GB totali ({current_usage_percent:.1f}%)")
+        logging.info("log:logs.storage_before_cleanup:%s:%s:%s" % (used_gb, total_gb, current_usage_percent))
+        logging.info("log:logs.cleanup_target_info:%s:%s" % (target_usage_percent, current_usage_percent))
         
         # Se l'utilizzo è già sotto la soglia target, non serve pulizia
         if current_usage_percent <= target_usage_percent:
-            logging.info(f"✅ Spazio OK: {current_usage_percent:.1f}% <= {target_usage_percent}%, nessuna pulizia necessaria")
+            logging.info("log:logs.space_ok_no_cleanup:%s:%s" % (current_usage_percent, target_usage_percent))
             return 0
         
         files = list(Path(path).glob("*.mkv"))
         if not files:
-            logging.warning("📂 Nessun file .mkv trovato per la pulizia")
+            logging.warning("log:logs.no_mkv_files")
             return 0
         
         # Protezione: non eliminare file più recenti di 1 ora
@@ -409,7 +410,7 @@ def smart_cleanup(path, target_usage_percent=90):
         safe_files = [f for f in files if current_time - f.stat().st_mtime > 3600]
         
         if not safe_files:
-            logging.warning("⚠️ Nessun file sicuro da eliminare (tutti i file sono più recenti di 1 ora)")
+            logging.warning("log:logs.no_safe_files")
             send_telegram_message("⚠️ Pulizia automatica: nessun file sicuro da eliminare (tutti recenti)")
             return 0
         
@@ -420,8 +421,8 @@ def smart_cleanup(path, target_usage_percent=90):
         target_used_bytes = (target_usage_percent / 100) * usage.total
         bytes_to_free = usage.used - target_used_bytes
         
-        logging.info(f"🎯 Obiettivo: ridurre utilizzo da {current_usage_percent:.1f}% a {target_usage_percent}%")
-        logging.info(f"📦 Bytes da liberare: {bytes_to_free / (1024**3):.1f} GB")
+        logging.info("log:logs.cleanup_objective:%s:%s" % (current_usage_percent, target_usage_percent))
+        logging.info("log:logs.bytes_to_free:%s" % (bytes_to_free / (1024**3)))
         
         deleted_count = 0
         bytes_freed = 0
@@ -433,7 +434,7 @@ def smart_cleanup(path, target_usage_percent=90):
                 bytes_freed += file_size
                 deleted_count += 1
                 
-                logging.info(f"🗑️ Eliminato: {file.name} ({file_size / (1024**2):.1f} MB)")
+                logging.info("log:logs.file_deleted:%s:%s" % (file.name, file_size / (1024**2)))
                 
                 # Controlla se abbiamo liberato abbastanza spazio
                 if bytes_freed >= bytes_to_free:
@@ -446,8 +447,8 @@ def smart_cleanup(path, target_usage_percent=90):
         final_usage = psutil.disk_usage(path)
         final_usage_percent = (final_usage.used / final_usage.total) * 100
         
-        logging.info(f"✅ Pulizia completata: {deleted_count} file eliminati, {bytes_freed / (1024**3):.1f} GB liberati")
-        logging.info(f"📊 Utilizzo finale: {final_usage_percent:.1f}%")
+        logging.info("log:logs.cleanup_summary:%s:%s" % (deleted_count, bytes_freed / (1024**3)))
+        logging.info("log:logs.final_usage:%s" % final_usage_percent)
         
         send_telegram_message(f"🗑️ Pulizia automatica completata:\n"
                             f"• {deleted_count} file eliminati\n"
@@ -546,29 +547,120 @@ health_thread = threading.Thread(target=system_health_check, daemon=True)
 health_thread.start()
 
 def debug_storage_thresholds():
-    """Funzione di debug per verificare le soglie di storage"""
+    """Funzione di debug per verificare le soglie di storage NVR"""
     try:
-        from config import STORAGE_MAX_USE
         usage = psutil.disk_usage(REGISTRAZIONI_DIR)
         total_gb = usage.total / (1024 ** 3)
         used_gb = usage.used / (1024 ** 3)
         current_usage_percent = (usage.used / usage.total) * 100
         
-        logging.info(f"🔍 DEBUG Storage Thresholds:")
+        # Soglie fisse per NVR
+        cleanup_threshold = 90.0
+        cleanup_target = 88.0
+        first_warning = 85.0
+        second_warning = 87.0
+        
+        logging.info(f"🔍 DEBUG Storage NVR:")
         logging.info(f"  📊 Utilizzo attuale: {current_usage_percent:.1f}%")
-        logging.info(f"  ⚙️ STORAGE_MAX_USE: {STORAGE_MAX_USE} ({STORAGE_MAX_USE * 100}%)")
-        logging.info(f"  🚨 Soglia pulizia: {STORAGE_MAX_USE * 100}%")
-        logging.info(f"  📢 Soglia notifica: 99%")
-        logging.info(f"  🎯 Target pulizia: {min(90, STORAGE_MAX_USE * 100 - 5)}%")
+        logging.info(f"  📢 Prima notifica: {first_warning}%")
+        logging.info(f"  🚨 Seconda notifica: {second_warning}%")
+        logging.info(f"  �️ Soglia pulizia: {cleanup_threshold}%")
+        logging.info(f"  🎯 Target pulizia: {cleanup_target}%")
+        logging.info(f"  📁 File fallback: 20")
+        
+        # Determina lo stato attuale
+        if current_usage_percent < first_warning:
+            status = "✅ NORMALE"
+        elif current_usage_percent < second_warning:
+            status = "⚠️ AVVISO"
+        elif current_usage_percent < cleanup_threshold:
+            status = "🚨 CRITICO"
+        else:
+            status = "🗑️ PULIZIA ATTIVA"
+            
+        logging.info(f"  📍 Stato attuale: {status}")
         
         return {
             'current_percent': current_usage_percent,
-            'cleanup_trigger': STORAGE_MAX_USE * 100,
-            'notification_trigger': 99,
-            'cleanup_target': min(90, STORAGE_MAX_USE * 100 - 5)
+            'first_warning': first_warning,
+            'second_warning': second_warning,
+            'cleanup_trigger': cleanup_threshold,
+            'cleanup_target': cleanup_target,
+            'status': status,
+            'files_fallback': 20
         }
         
     except Exception as e:
         logging.error(f"❌ Errore debug soglie storage: {e}")
         return None
+
+def simple_nvr_cleanup(path, files_to_delete=20):
+    """
+    Pulizia semplificata per NVR: elimina un numero fisso di file più vecchi.
+    Progettata specificamente per sistemi di videosorveglianza.
+    
+    Args:
+        path: Percorso della directory con i file da pulire
+        files_to_delete: Numero di file da eliminare (default 20)
+    
+    Returns:
+        int: Numero di file effettivamente eliminati
+    """
+    try:
+        usage_before = psutil.disk_usage(path)
+        usage_percent_before = (usage_before.used / usage_before.total) * 100
+        
+        logging.info("log:logs.nvr_cleanup_simple_start")
+        logging.info("log:logs.nvr_cleanup_state_before:%s" % usage_percent_before)
+        logging.info("log:logs.nvr_cleanup_target_files:%s" % files_to_delete)
+        
+        files = list(Path(path).glob("*.mkv"))
+        if not files:
+            logging.warning("log:logs.nvr_cleanup_no_files")
+            return 0
+        
+        # Protezione: non eliminare file più recenti di 1 ora
+        current_time = time.time()
+        safe_files = [f for f in files if current_time - f.stat().st_mtime > 3600]
+        
+        if not safe_files:
+            logging.warning("log:logs.nvr_cleanup_no_safe_files")
+            send_telegram_message("⚠️ Pulizia NVR: nessun file sicuro da eliminare (tutti recenti)")
+            return 0
+        
+        # Ordina per data di modifica (più vecchi per primi)
+        safe_files.sort(key=lambda f: f.stat().st_mtime)
+        
+        # Elimina i file più vecchi
+        deleted_count = 0
+        total_size_freed = 0
+        files_to_process = min(files_to_delete, len(safe_files))
+        
+        for i in range(files_to_process):
+            file = safe_files[i]
+            try:
+                file_size = file.stat().st_size
+                file.unlink()
+                total_size_freed += file_size
+                deleted_count += 1
+                
+                logging.info("log:logs.nvr_cleanup_file_deleted:%s:%s" % (file.name, file_size / (1024**2)))
+                
+            except Exception as e:
+                logging.error(f"❌ Errore eliminazione {file.name}: {e}")
+        
+        # Verifica finale
+        usage_after = psutil.disk_usage(path)
+        usage_percent_after = (usage_after.used / usage_after.total) * 100
+        
+        logging.info("log:logs.nvr_cleanup_summary")
+        logging.info("log:logs.nvr_cleanup_files_deleted:%s:%s" % (deleted_count, files_to_delete))
+        logging.info("log:logs.nvr_cleanup_space_freed:%s" % (total_size_freed / (1024**3)))
+        logging.info("log:logs.nvr_cleanup_usage_change:%s:%s" % (usage_percent_before, usage_percent_after))
+        
+        return deleted_count
+        
+    except Exception as e:
+        logging.error("log:logs.nvr_cleanup_simple_error:%s" % e)
+        return 0
 

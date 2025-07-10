@@ -61,39 +61,71 @@ def monitor_storage_and_processes(FFMPEG_COMMANDS):
             
             # Debug ogni minuto del controllo storage
             if int(time.time()) % 60 == 0:  # Una volta al minuto
-                logging.info(f"🔍 Storage check: {used_gb:.1f}GB/{MAX_STORAGE_GB}GB ({usage_percent:.1f}%) - Soglia: {MAX_STORAGE_GB * STORAGE_MAX_USE:.1f}GB")
+                logging.info("log:logs.storage_check_nvr:%s:%s:%s:90" % (used_gb, MAX_STORAGE_GB, usage_percent))
             
-            # Avviso preventivo al 80%
-            if usage_percent >= 80 and storage_alerts == 0:
-                logging.warning(f"log:logs.disk_space_warning:{usage_percent:.1f}")
-                send_telegram_message(f"⚠️ Spazio disco al {usage_percent:.1f}% - Considerare una pulizia manuale")
+            # Pulizia automatica semplificata per NVR - Soglia fissa al 90%
+            cleanup_threshold_percent = 90.0
+            cleanup_target_percent = 88.0  # Target: scendere all'88%
+            
+            # Log delle soglie configurate (solo una volta ogni ora)
+            if int(time.time()) % 3600 == 0:  # Una volta all'ora
+                logging.info("log:logs.nvr_cleanup_config")
+                logging.info("log:logs.nvr_cleanup_threshold:%s" % cleanup_threshold_percent)
+                logging.info("log:logs.nvr_cleanup_target:%s" % cleanup_target_percent)
+                logging.info("log:logs.nvr_cleanup_current:%s" % usage_percent)
+                
+            # Avviso preventivo al 85% e 87%
+            if usage_percent >= 85 and usage_percent < 87 and storage_alerts == 0:
+                logging.warning("log:logs.storage_warning_85:%s" % usage_percent)
+                send_telegram_message(f"⚠️ Spazio disco al {usage_percent:.1f}% - Pulizia automatica al 90%")
                 storage_alerts = 1
+            elif usage_percent >= 87 and storage_alerts <= 1:
+                logging.warning("log:logs.storage_critical_87:%s" % usage_percent)
+                send_telegram_message(f"� Spazio disco critico al {usage_percent:.1f}% - Pulizia imminente al 90%")
+                storage_alerts = 2
             
-            # Pulizia automatica avanzata con debug
-            storage_threshold_gb = MAX_STORAGE_GB * STORAGE_MAX_USE
-            logging.debug(f"🔍 Debug pulizia: usati={used_gb:.1f}GB, soglia={storage_threshold_gb:.1f}GB, percentuale={usage_percent:.1f}%")
-            
-            if used_gb >= storage_threshold_gb:
-                logging.warning(f"🚨 SOGLIA SUPERATA! Avvio pulizia automatica - Usati: {used_gb:.1f}GB >= Soglia: {storage_threshold_gb:.1f}GB ({usage_percent:.1f}%)")
-                logging.warning(f"log:logs.disk_space_critical:{usage_percent:.1f}")
+            # Pulizia automatica quando si supera il 90%
+            if usage_percent >= cleanup_threshold_percent:
+                logging.warning("log:logs.nvr_cleanup_activated:%s:%s" % (usage_percent, cleanup_threshold_percent))
+                logging.warning("log:logs.disk_space_critical:%s" % usage_percent)
+                send_telegram_message(f"�️ Pulizia automatica NVR attivata - Spazio: {usage_percent:.1f}%")
+                
                 try:
-                    # Usa pulizia intelligente basata su percentuale
-                    # Target: ridurre al 90% se la soglia STORAGE_MAX_USE è superata
-                    target_percent = min(90, STORAGE_MAX_USE * 100 - 5)  # 5% sotto la soglia di trigger
-                    deleted = process_manager.smart_cleanup(REGISTRAZIONI_DIR, target_usage_percent=target_percent)
+                    # Opzione 1: Pulizia per percentuale (scende all'88%)
+                    deleted = process_manager.smart_cleanup(REGISTRAZIONI_DIR, target_usage_percent=cleanup_target_percent)
+                    
                     if deleted > 0:
                         storage_alerts = 0  # Reset avvisi dopo pulizia
                         # Riconteggia lo spazio dopo la pulizia
                         new_used_gb = process_manager.get_storage_usage_gb()
                         new_usage_percent = (new_used_gb / MAX_STORAGE_GB) * 100
-                        logging.info(f"📊 Spazio post-pulizia: {new_usage_percent:.1f}%")
+                        logging.info("log:logs.nvr_cleanup_completed:%s:%s" % (usage_percent, new_usage_percent))
+                        send_telegram_message(f"✅ Pulizia NVR completata:\n• {deleted} file eliminati\n• Spazio: {usage_percent:.1f}% → {new_usage_percent:.1f}%")
                     else:
-                        logging.error("log:logs.auto_cleanup_failed")
-                        send_telegram_message("❌ Pulizia automatica fallita - Intervento manuale necessario")
+                        # Opzione 2 (fallback): Elimina 20 file fissi
+                        logging.warning("log:logs.nvr_cleanup_fallback:20")
+                        deleted_fallback = process_manager.delete_oldest_files(REGISTRAZIONI_DIR, files_to_delete=20)
+                        if deleted_fallback > 0:
+                            new_used_gb = process_manager.get_storage_usage_gb()
+                            new_usage_percent = (new_used_gb / MAX_STORAGE_GB) * 100
+                            logging.info("log:logs.nvr_cleanup_fallback_completed:%s" % deleted_fallback)
+                            send_telegram_message(f"✅ Pulizia NVR (fallback):\n• {deleted_fallback} file eliminati\n• Spazio: {usage_percent:.1f}% → {new_usage_percent:.1f}%")
+                        else:
+                            logging.error("log:logs.auto_cleanup_failed")
+                            send_telegram_message("❌ CRITICO: Pulizia automatica fallita - Intervento manuale necessario!")
+                            
                 except Exception as e:
-                    logging.error(f"log:logs.cleanup_error:{e}")
-                    # Fallback alla pulizia classica
-                    process_manager.delete_oldest_files(REGISTRAZIONI_DIR, files_to_delete=10)
+                    logging.error("log:logs.cleanup_error:%s" % e)
+                    # Ultimo tentativo: elimina 20 file
+                    try:
+                        deleted_emergency = process_manager.delete_oldest_files(REGISTRAZIONI_DIR, files_to_delete=20)
+                        if deleted_emergency > 0:
+                            logging.info("log:logs.nvr_cleanup_emergency:%s" % deleted_emergency)
+                            send_telegram_message(f"⚠️ Pulizia di emergenza: {deleted_emergency} file eliminati")
+                    except Exception as e2:
+                        logging.error("log:logs.cleanup_error:%s" % e2)
+                        logging.error("log:logs.nvr_cleanup_all_failed")
+                        send_telegram_message("❌ CRITICO: Tutti i tentativi di pulizia falliti!")
 
             # Monitoraggio processi migliorato con intervalli più intelligenti
             healthy_processes = 0
