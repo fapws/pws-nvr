@@ -408,14 +408,17 @@ def system_health_command(message):
         except:
             max_temp = 0
         
+        # Calcola percentuale disco manualmente per consistenza e arrotonda
+        disk_percent_manual = round((disk_usage.used / disk_usage.total) * 100, 1)
+        
         message_text = get_translation('bot', 'system_health_title') + "\n\n"
         message_text += get_translation('bot', 'system_health_cpu', cpu_percent) + "\n"
         message_text += get_translation('bot', 'system_health_ram', memory.percent, f"{memory.used / (1024**3):.1f}", f"{memory.total / (1024**3):.1f}") + "\n"
-        message_text += get_translation('bot', 'system_health_disk', disk_usage.percent, f"{disk_usage.used / (1024**3):.1f}", f"{disk_usage.total / (1024**3):.1f}") + "\n"
+        message_text += get_translation('bot', 'system_health_disk', disk_percent_manual, f"{disk_usage.used / (1024**3):.1f}", f"{disk_usage.total / (1024**3):.1f}") + "\n"
         message_text += get_translation('bot', 'system_health_temp', max_temp) + "\n"
         message_text += get_translation('bot', 'system_health_uptime', f"{uptime / 3600:.1f}") + "\n"
         message_text += get_translation('bot', 'system_health_ffmpeg', ffmpeg_count) + "\n\n"
-        message_text += get_health_status(cpu_percent, memory.percent, disk_usage.percent, max_temp)
+        message_text += get_health_status(cpu_percent, memory.percent, disk_percent_manual, max_temp)
         
         bot.reply_to(message, message_text, parse_mode='Markdown')
     except Exception as e:

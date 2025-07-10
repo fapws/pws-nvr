@@ -36,7 +36,7 @@ EXTERNAL_DEVICE = config.get("STORAGE", "EXTERNAL_DEVICE", fallback="/dev/sdb1")
 REC_FOLDER_NAME = config.get("STORAGE", "REC_FOLDER_NAME", fallback="registrazioni")
 CUSTOM_PATH = config.get("STORAGE", "CUSTOM_PATH", fallback="")
 STORAGE_SIZE = config.getint("STORAGE", "STORAGE_SIZE", fallback=450)
-STORAGE_MAX_USE = config.getfloat("STORAGE", "STORAGE_MAX_USE", fallback=0.95)
+STORAGE_MAX_USE = config.getfloat("STORAGE", "STORAGE_MAX_USE", fallback=0.90)
 
 def mount_hard_drive():
     """ Monta l'hard disk esterno se necessario """

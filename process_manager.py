@@ -373,27 +373,60 @@ def get_storage_statistics():
         logging.error(f"❌ Errore calcolo statistiche storage: {e}")
         return None
 
-def smart_cleanup(path, target_free_gb=100):
-    """Pulizia intelligente basata su spazio target da liberare"""
+def smart_cleanup(path, target_usage_percent=90):
+    """
+    Pulizia intelligente basata su percentuale di utilizzo target.
+    Elimina i file più vecchi fino a raggiungere la percentuale target.
+    
+    Args:
+        path: Percorso della directory con i file da pulire
+        target_usage_percent: Percentuale target di utilizzo (default 90%)
+    
+    Returns:
+        int: Numero di file eliminati
+    """
     try:
         usage = psutil.disk_usage(path)
+        total_gb = usage.total / (1024 ** 3)
+        used_gb = usage.used / (1024 ** 3)
         free_gb = usage.free / (1024 ** 3)
+        current_usage_percent = (usage.used / usage.total) * 100
         
-        if free_gb >= target_free_gb:
-            return 0  # Nessuna pulizia necessaria
+        logging.info(f"💾 Stato storage: {used_gb:.1f}GB usati / {total_gb:.1f}GB totali ({current_usage_percent:.1f}%)")
+        
+        # Se l'utilizzo è già sotto la soglia target, non serve pulizia
+        if current_usage_percent <= target_usage_percent:
+            logging.info(f"✅ Spazio OK: {current_usage_percent:.1f}% <= {target_usage_percent}%, nessuna pulizia necessaria")
+            return 0
         
         files = list(Path(path).glob("*.mkv"))
         if not files:
+            logging.warning("📂 Nessun file .mkv trovato per la pulizia")
+            return 0
+        
+        # Protezione: non eliminare file più recenti di 1 ora
+        current_time = time.time()
+        safe_files = [f for f in files if current_time - f.stat().st_mtime > 3600]
+        
+        if not safe_files:
+            logging.warning("⚠️ Nessun file sicuro da eliminare (tutti i file sono più recenti di 1 ora)")
+            send_telegram_message("⚠️ Pulizia automatica: nessun file sicuro da eliminare (tutti recenti)")
             return 0
         
         # Ordina per data di modifica (più vecchi per primi)
-        files.sort(key=lambda f: f.stat().st_mtime)
+        safe_files.sort(key=lambda f: f.stat().st_mtime)
+        
+        # Calcola quanti byte liberare per raggiungere la percentuale target
+        target_used_bytes = (target_usage_percent / 100) * usage.total
+        bytes_to_free = usage.used - target_used_bytes
+        
+        logging.info(f"🎯 Obiettivo: ridurre utilizzo da {current_usage_percent:.1f}% a {target_usage_percent}%")
+        logging.info(f"📦 Bytes da liberare: {bytes_to_free / (1024**3):.1f} GB")
         
         deleted_count = 0
-        bytes_to_free = (target_free_gb - free_gb) * (1024 ** 3)
         bytes_freed = 0
         
-        for file in files:
+        for file in safe_files:
             try:
                 file_size = file.stat().st_size
                 file.unlink()
@@ -402,19 +435,30 @@ def smart_cleanup(path, target_free_gb=100):
                 
                 logging.info(f"🗑️ Eliminato: {file.name} ({file_size / (1024**2):.1f} MB)")
                 
+                # Controlla se abbiamo liberato abbastanza spazio
                 if bytes_freed >= bytes_to_free:
                     break
                     
             except Exception as e:
                 logging.error(f"❌ Errore eliminazione {file.name}: {e}")
         
+        # Verifica finale
+        final_usage = psutil.disk_usage(path)
+        final_usage_percent = (final_usage.used / final_usage.total) * 100
+        
         logging.info(f"✅ Pulizia completata: {deleted_count} file eliminati, {bytes_freed / (1024**3):.1f} GB liberati")
-        send_telegram_message(f"🗑️ Pulizia automatica: {deleted_count} file eliminati, {bytes_freed / (1024**3):.1f} GB liberati")
+        logging.info(f"📊 Utilizzo finale: {final_usage_percent:.1f}%")
+        
+        send_telegram_message(f"🗑️ Pulizia automatica completata:\n"
+                            f"• {deleted_count} file eliminati\n"
+                            f"• {bytes_freed / (1024**3):.1f} GB liberati\n"
+                            f"• Utilizzo: {current_usage_percent:.1f}% → {final_usage_percent:.1f}%")
         
         return deleted_count
         
     except Exception as e:
         logging.error(f"❌ Errore durante la pulizia intelligente: {e}")
+        send_telegram_message(f"❌ Errore pulizia automatica: {str(e)}")
         return 0
 
 def delete_oldest_files(path, files_to_delete=6):
@@ -500,4 +544,31 @@ def system_health_check():
 # Avvia il thread di health check
 health_thread = threading.Thread(target=system_health_check, daemon=True)
 health_thread.start()
+
+def debug_storage_thresholds():
+    """Funzione di debug per verificare le soglie di storage"""
+    try:
+        from config import STORAGE_MAX_USE
+        usage = psutil.disk_usage(REGISTRAZIONI_DIR)
+        total_gb = usage.total / (1024 ** 3)
+        used_gb = usage.used / (1024 ** 3)
+        current_usage_percent = (usage.used / usage.total) * 100
+        
+        logging.info(f"🔍 DEBUG Storage Thresholds:")
+        logging.info(f"  📊 Utilizzo attuale: {current_usage_percent:.1f}%")
+        logging.info(f"  ⚙️ STORAGE_MAX_USE: {STORAGE_MAX_USE} ({STORAGE_MAX_USE * 100}%)")
+        logging.info(f"  🚨 Soglia pulizia: {STORAGE_MAX_USE * 100}%")
+        logging.info(f"  📢 Soglia notifica: 99%")
+        logging.info(f"  🎯 Target pulizia: {min(90, STORAGE_MAX_USE * 100 - 5)}%")
+        
+        return {
+            'current_percent': current_usage_percent,
+            'cleanup_trigger': STORAGE_MAX_USE * 100,
+            'notification_trigger': 99,
+            'cleanup_target': min(90, STORAGE_MAX_USE * 100 - 5)
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ Errore debug soglie storage: {e}")
+        return None
 

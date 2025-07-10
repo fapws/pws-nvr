@@ -19,7 +19,7 @@ from multilingual_logging import setup_multilingual_logging
 setup_multilingual_logging()
 
 STORAGE_SIZE = config.config.getint("STORAGE", "STORAGE_SIZE", fallback=450)
-STORAGE_MAX_USE = config.config.getfloat("STORAGE", "STORAGE_MAX_USE", fallback=0.95)
+STORAGE_MAX_USE = config.config.getfloat("STORAGE", "STORAGE_MAX_USE", fallback=0.90)
 
 # Inizializza l'executor sicuro
 secure_executor = SecureCommandExecutor()
@@ -59,20 +59,34 @@ def monitor_storage_and_processes(FFMPEG_COMMANDS):
             used_gb = process_manager.get_storage_usage_gb()
             usage_percent = (used_gb / MAX_STORAGE_GB) * 100
             
+            # Debug ogni minuto del controllo storage
+            if int(time.time()) % 60 == 0:  # Una volta al minuto
+                logging.info(f"🔍 Storage check: {used_gb:.1f}GB/{MAX_STORAGE_GB}GB ({usage_percent:.1f}%) - Soglia: {MAX_STORAGE_GB * STORAGE_MAX_USE:.1f}GB")
+            
             # Avviso preventivo al 80%
             if usage_percent >= 80 and storage_alerts == 0:
                 logging.warning(f"log:logs.disk_space_warning:{usage_percent:.1f}")
                 send_telegram_message(f"⚠️ Spazio disco al {usage_percent:.1f}% - Considerare una pulizia manuale")
                 storage_alerts = 1
             
-            # Pulizia automatica avanzata
-            if used_gb >= (MAX_STORAGE_GB * STORAGE_MAX_USE):
+            # Pulizia automatica avanzata con debug
+            storage_threshold_gb = MAX_STORAGE_GB * STORAGE_MAX_USE
+            logging.debug(f"🔍 Debug pulizia: usati={used_gb:.1f}GB, soglia={storage_threshold_gb:.1f}GB, percentuale={usage_percent:.1f}%")
+            
+            if used_gb >= storage_threshold_gb:
+                logging.warning(f"🚨 SOGLIA SUPERATA! Avvio pulizia automatica - Usati: {used_gb:.1f}GB >= Soglia: {storage_threshold_gb:.1f}GB ({usage_percent:.1f}%)")
                 logging.warning(f"log:logs.disk_space_critical:{usage_percent:.1f}")
                 try:
-                    # Usa pulizia intelligente invece di eliminazione fissa
-                    deleted = process_manager.smart_cleanup(REGISTRAZIONI_DIR, target_free_gb=50)
+                    # Usa pulizia intelligente basata su percentuale
+                    # Target: ridurre al 90% se la soglia STORAGE_MAX_USE è superata
+                    target_percent = min(90, STORAGE_MAX_USE * 100 - 5)  # 5% sotto la soglia di trigger
+                    deleted = process_manager.smart_cleanup(REGISTRAZIONI_DIR, target_usage_percent=target_percent)
                     if deleted > 0:
                         storage_alerts = 0  # Reset avvisi dopo pulizia
+                        # Riconteggia lo spazio dopo la pulizia
+                        new_used_gb = process_manager.get_storage_usage_gb()
+                        new_usage_percent = (new_used_gb / MAX_STORAGE_GB) * 100
+                        logging.info(f"📊 Spazio post-pulizia: {new_usage_percent:.1f}%")
                     else:
                         logging.error("log:logs.auto_cleanup_failed")
                         send_telegram_message("❌ Pulizia automatica fallita - Intervento manuale necessario")
