@@ -63,9 +63,9 @@ def monitor_storage_and_processes(FFMPEG_COMMANDS):
             if int(time.time()) % 60 == 0:  # Una volta al minuto
                 logging.info("log:logs.storage_check_nvr:%s:%s:%s:90" % (used_gb, MAX_STORAGE_GB, usage_percent))
             
-            # Pulizia automatica semplificata per NVR - Soglia fissa al 92%
-            cleanup_threshold_percent = 92.0
-            cleanup_target_percent = 90.0  # Target: scendere all'90%
+            # Pulizia automatica semplificata per NVR - Soglia fissa al 94%
+            cleanup_threshold_percent = 94.0
+            cleanup_target_percent = 92.0  # Target: scendere all'92%
             
             # Log delle soglie configurate (solo una volta ogni ora)
             if int(time.time()) % 3600 == 0:  # Una volta all'ora
@@ -82,13 +82,13 @@ def monitor_storage_and_processes(FFMPEG_COMMANDS):
                 logging.warning("log:logs.storage_critical_87:%s" % usage_percent)
                 storage_alerts = 2
             
-            # Pulizia automatica quando si supera il 92%
+            # Pulizia automatica quando si supera la soglia impostata
             if usage_percent >= cleanup_threshold_percent:
                 logging.warning("log:logs.nvr_cleanup_activated:%s:%s" % (usage_percent, cleanup_threshold_percent))
                 logging.warning("log:logs.disk_space_critical:%s" % usage_percent)
                 
                 try:
-                    # Opzione 1: Pulizia per percentuale (scende all'90%)
+                    # Opzione 1: Pulizia per percentuale
                     deleted = process_manager.smart_cleanup(REGISTRAZIONI_DIR, target_usage_percent=cleanup_target_percent)
                     
                     if deleted > 0:

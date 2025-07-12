@@ -507,6 +507,9 @@ def system_health_check():
             memory = psutil.virtual_memory()
             disk_usage = psutil.disk_usage(REGISTRAZIONI_DIR)
             
+            # Calcola percentuale disco manualmente per consistenza
+            disk_percent_manual = (disk_usage.used / disk_usage.total) * 100
+            
             # Avvisi per risorse critiche
             if cpu_percent > 90:
                 logging.warning(f"⚠️ CPU usage critico: {cpu_percent}%")
@@ -516,9 +519,9 @@ def system_health_check():
                 logging.warning(f"⚠️ Memoria critica: {memory.percent}%")
                 send_telegram_message(f"⚠️ Memoria critica: {memory.percent}%")
             
-            if disk_usage.percent > 99:
-                logging.critical(f"🔥 Disco quasi pieno: {disk_usage.percent}%")
-                send_telegram_message(f"🔥 CRITICO: Disco quasi pieno: {disk_usage.percent}%")
+            if disk_percent_manual > 99:
+                logging.critical(f"🔥 Disco quasi pieno: {disk_percent_manual:.1f}%")
+                send_telegram_message(f"🔥 CRITICO: Disco quasi pieno: {disk_percent_manual:.1f}%")
             
             # Verifica processi orfani ffmpeg
             ffmpeg_processes = [p for p in psutil.process_iter(['pid', 'name', 'cmdline']) 
@@ -537,7 +540,7 @@ def system_health_check():
             
             # Log salute sistema (ogni 10 minuti)
             if time.time() % 600 < HEALTH_CHECK_INTERVAL:
-                logging.info(f"💚 Sistema OK: CPU {cpu_percent}%, RAM {memory.percent}%, Disco {disk_usage.percent}%")
+                logging.info(f"💚 Sistema OK: CPU {cpu_percent}%, RAM {memory.percent}%, Disco {disk_percent_manual:.1f}%")
                 
         except Exception as e:
             logging.error(f"❌ Errore health check: {e}")
